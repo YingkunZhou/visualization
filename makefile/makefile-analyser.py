@@ -74,6 +74,8 @@ if __name__ == '__main__':
         links = set()
         add_links(links, t, i)
         for d in ds:
+            if d == '|':
+                continue
             add = True
             if d in targets:
                 add = False
