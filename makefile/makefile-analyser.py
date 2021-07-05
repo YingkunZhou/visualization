@@ -7,24 +7,49 @@ def add_links(link_set, s, n):
     lpos = 0
     rpos = 0
     link = False
+    exclude = True
+    replace = ''
     for c in s:
         if c == ')':
             assert link, \
                     'ERROR, need left parentheses | Line %d:%s' % (n, s)
-            link_set.add(s[lpos: rpos])
+            exclude = True
             link = False
+            pattern = s[lpos:rpos]
+            link_set.add(pattern)
+            if pattern in mapping:
+                replace += mapping[pattern][1]
+            lpos = rpos + 1
+        elif link and exclude and c == '/':
+            link = False
+            pattern = s[lpos:rpos]
+            link_set.add(pattern)
+            if pattern in mapping:
+                replace += mapping[pattern][1]
+            lpos = rpos
+
         rpos += 1
+
         if c == '(':
             assert rpos > 1 and s[rpos-2] == '$', \
                     'ERROR, need parentheses followed by $ | Line %d:%s' % (n, s)
+            exclude = False
             link = True
             lpos = rpos
+        elif c == '$':
+            replace += s[lpos:rpos-1]
+            link = True
+            lpos = rpos
+
+    if lpos < rpos:
+        replace += s[lpos:rpos]
+    return replace
 
 weight = 10
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        print("please use: python makefile-analyser.py makefile callgrind")
+        print("please use: python makefile-analyser.py makefile callgrind.out")
         sys.exit()
 
     # absolute path is recommended
@@ -51,6 +76,9 @@ if __name__ == '__main__':
             else:
                 s0 = words[0]
                 s1 = ' '.join(words[2:])
+
+            if words[-1][-1] == '\\':
+                s1 = s0 + ' list'
 
             if s0 in mapping:
                 print('WARNING: multiple assignment | Line %d:%s' % (i, s0))
@@ -80,9 +108,11 @@ if __name__ == '__main__':
             if d in targets:
                 add = False
             elif d[0] == '$':
-                assert d[1] == '(', \
-                        'ERROR, need parentheses followed by $ | Line %d:%s' % (i, d)
-                link = d[2:-1] # strip ')'
+                if d[1] == '(':
+                    link = d[2:-1] # strip ')'
+                else:
+                    link = d[1:]
+
                 if link in mapping:
                     (n, s) = mapping[link]
                     assert not s.isspace() and s != ''
@@ -92,10 +122,11 @@ if __name__ == '__main__':
 
             if add:
                 assert not d.isspace() and d != ''
+                d = add_links(links, d, i)
                 used.add(d)
-                add_links(links, d, i)
             else:
                 desc += 'cfi=' + makefile + '\n'
+
             desc += add_calls(d, i)
 
         for link in links:
